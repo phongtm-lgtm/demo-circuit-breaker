@@ -1,0 +1,6 @@
+# Use with docker-compose-desktop.yml when the application runs on Windows:
+# docker compose -f docker-compose-desktop.yml -f docker-compose-host-app.yml up -d --no-deps prometheus grafana
+services:
+  prometheus:
+    volumes:
+      - ./docker/prometheus-host-app.yml:/etc/prometheus/prometheus.yml:ro

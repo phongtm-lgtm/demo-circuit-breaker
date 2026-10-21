@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+  external_labels:
+    monitor: resilience4j-monitor
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: resilience4j-spring-boot3-demo
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:9080']
+        labels:
+          instance: localhost:9080

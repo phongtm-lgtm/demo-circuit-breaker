@@ -1,0 +1,60 @@
+@application = http://localhost:8083
+@candidates = http://localhost:8082
+@applicationId = 1
+
+### Read application with candidate profile (replace applicationId from SQL)
+GET {{application}}/api/v1/applications/{{applicationId}}
+X-User-ID: 42
+X-User-Email: demo@example.com
+X-User-Name: Demo User
+
+### Reset before an independent scenario
+POST {{application}}/api/v1/circuit-breakers/candidateDetails/resets
+
+### Normal candidate-service
+PUT {{candidates}}/api/v1/services/candidate-service/behavior
+Content-Type: application/json
+
+{"mode":"NORMAL","delayMs":0}
+
+### Simulate 503; read application 5 times then a sixth time
+PUT {{candidates}}/api/v1/services/candidate-service/behavior
+Content-Type: application/json
+
+{"mode":"ERROR","delayMs":0}
+
+### Slow success (read timeout 5000ms)
+PUT {{candidates}}/api/v1/services/candidate-service/behavior
+Content-Type: application/json
+
+{"mode":"SLOW","delayMs":3000}
+
+### Ignored business error
+PUT {{candidates}}/api/v1/services/candidate-service/behavior
+Content-Type: application/json
+
+{"mode":"NOT_FOUND","delayMs":0}
+
+### Read timeout
+PUT {{candidates}}/api/v1/services/candidate-service/behavior
+Content-Type: application/json
+
+{"mode":"SLOW","delayMs":7000}
+
+### State and counters
+GET {{application}}/api/v1/circuit-breakers/candidateDetails
+
+### Received downstream calls (does not increase while circuit blocks)
+GET {{candidates}}/api/v1/services/candidate-service/behavior
+
+### Recent events
+GET {{application}}/actuator/circuitbreakerevents/candidateDetails
+
+### Health
+GET {{application}}/actuator/health
+
+### Metrics
+GET {{application}}/actuator/metrics/resilience4j.circuitbreaker.calls?tag=name:candidateDetails
+
+### Prometheus scrape
+GET {{application}}/actuator/prometheus

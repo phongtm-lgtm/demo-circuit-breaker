@@ -1,0 +1,57 @@
+{
+  "uid": "ats-candidate-details",
+  "title": "ATS - Candidate Circuit Breaker",
+  "tags": ["ATS", "resilience4j"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {"from": "now-15m", "to": "now"},
+  "panels": [
+    {
+      "id": 1, "title": "Circuit states (1 = active)", "type": "timeseries",
+      "description": "CLOSED allows calls; OPEN blocks calls; HALF_OPEN permits probes. Scraped every 2 seconds.",
+      "gridPos": {"x": 0, "y": 0, "w": 16, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_state{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "{{state}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 1, "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter"}}, "overrides": []}
+    },
+    {
+      "id": 2, "title": "Application scrape UP", "type": "stat",
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [{"refId": "A", "expr": "up{job=\"ats-application-service\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}, "overrides": []}
+    },
+    {
+      "id": 3, "title": "Failure / slow call rate (%)", "type": "timeseries",
+      "description": "-1 means not enough samples. Threshold is 50% for both rates.",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "resilience4j_circuitbreaker_failure_rate{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "failure %"},
+        {"refId": "B", "expr": "resilience4j_circuitbreaker_slow_call_rate{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "slow %"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": -1, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 50}]}, "custom": {"thresholdsStyle": {"mode": "line"}}}, "overrides": []}
+    },
+    {
+      "id": 4, "title": "Blocked calls (cumulative)", "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_not_permitted_calls_total{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "blocked"}]
+    },
+    {
+      "id": 5, "title": "Recorded calls (cumulative, not HTTP response status)", "type": "timeseries",
+      "description": "Fallback may return HTTP 200 even though the downstream call was recorded as failed. Counters reset on application restart.",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_calls_seconds_count{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "{{kind}}"}]
+    },
+    {
+      "id": 6, "title": "Buffered calls (sliding window)", "type": "timeseries",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "ats-prometheus"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_buffered_calls{application=\"application-service\",name=\"candidateDetails\"}", "legendFormat": "{{kind}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    }
+  ]
+}

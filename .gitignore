@@ -1,0 +1,11 @@
+.idea/
+*.iml
+.DS_Store
+.env
+.env.*
+!.env.example
+**/target/
+**/build/
+**/.gradle/
+**/node_modules/
+*.log

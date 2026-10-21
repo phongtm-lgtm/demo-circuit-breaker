@@ -1,0 +1,136 @@
+{
+  "__inputs": [
+    {"name": "DS_PROMETHEUS", "label": "Prometheus", "description": "Select the Prometheus datasource scraping application-service:8083", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}
+  ],
+  "id": null,
+  "uid": "ats-application-candidate",
+  "title": "ATS - application-service to candidate-service",
+  "description": "Circuit candidateDetails runs in application-service and protects calls to candidate-service. Metrics are scraped from application-service, not candidate-service. Fallback HTTP 200 can still represent a recorded downstream failure.",
+  "tags": ["ATS", "Resilience4j", "Circuit Breaker"],
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "timezone": "browser",
+  "time": {"from": "now-15m", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "application", "label": "Application", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "query": "label_values(resilience4j_circuitbreaker_state, application)",
+        "refresh": 1, "multi": false, "includeAll": false,
+        "current": {"text": "application-service", "value": "application-service"},
+        "options": [], "sort": 1
+      },
+      {
+        "name": "instance", "label": "Application-service instance", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "query": "label_values(resilience4j_circuitbreaker_state{application=~\"$application\"}, instance)",
+        "refresh": 1, "multi": false, "includeAll": false,
+        "current": {"text": "host.docker.internal:8083", "value": "host.docker.internal:8083"},
+        "options": [], "sort": 1
+      },
+      {
+        "name": "circuitbreaker_name", "label": "Circuit Breaker", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "query": "label_values(resilience4j_circuitbreaker_state{application=~\"$application\",instance=~\"$instance\"}, name)",
+        "refresh": 1, "multi": false, "includeAll": false,
+        "current": {"text": "candidateDetails", "value": "candidateDetails"},
+        "options": [], "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "title": "CLOSED (1 = active)", "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_state{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\",state=\"closed\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 1, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 2, "title": "OPEN (1 = active)", "type": "stat",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_state{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\",state=\"open\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 1, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 3, "title": "HALF_OPEN (1 = active)", "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_state{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\",state=\"half_open\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 1, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 4, "title": "Application-service scrape", "type": "stat",
+      "description": "UP means Prometheus can scrape application-service. It does not indicate candidate-service health.",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "up{instance=~\"$instance\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}, "overrides": []}
+    },
+    {
+      "id": 5, "title": "CircuitBreaker States - candidateDetails", "type": "timeseries",
+      "description": "Each state is 0 or 1. Brief transitions may fall between Prometheus scrapes.",
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 7},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_state{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "{{state}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 1, "decimals": 0, "custom": {"lineInterpolation": "stepAfter"}}, "overrides": []}
+    },
+    {
+      "id": 6, "title": "Failure Rate / Slow Call Rate", "type": "timeseries",
+      "description": "Either rate >= 50% opens the circuit after at least 5 counted calls in CLOSED. -1 means insufficient samples. Slow means duration > 2s.",
+      "gridPos": {"x": 0, "y": 11, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "expr": "resilience4j_circuitbreaker_failure_rate{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "Failure rate"},
+        {"refId": "B", "expr": "resilience4j_circuitbreaker_slow_call_rate{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "Slow call rate"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": -1, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 50}]}, "custom": {"thresholdsStyle": {"mode": "line"}}}, "overrides": []}
+    },
+    {
+      "id": 7, "title": "Buffered calls - sliding window", "type": "timeseries",
+      "description": "Maximum window size is 10. Ignored 4xx calls do not enter the window. HALF_OPEN uses 2 probes instead of the CLOSED minimum of 5.",
+      "gridPos": {"x": 12, "y": 11, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_buffered_calls{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "{{kind}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 8, "title": "Recorded downstream calls (cumulative)", "type": "timeseries",
+      "description": "These are circuit outcomes, not the HTTP status returned by application-service. Fallback can return HTTP 200 after a failed downstream call. Circuit reset does not necessarily reset counters.",
+      "gridPos": {"x": 0, "y": 19, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_calls_seconds_count{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "{{kind}}"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 9, "title": "Blocked calls (cumulative)", "type": "timeseries",
+      "description": "Calls rejected by the circuit without invoking candidate-service. Compare increases before and after sending requests while OPEN.",
+      "gridPos": {"x": 12, "y": 19, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "resilience4j_circuitbreaker_not_permitted_calls_total{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}", "legendFormat": "not_permitted"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 10, "title": "Average downstream call duration (last 1m)", "type": "timeseries",
+      "description": "Shows duration of recorded calls, not end-to-end application response time. No calls in the interval can result in no data. SLOW mode at 3000ms should approach 3s.",
+      "gridPos": {"x": 0, "y": 27, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "expr": "rate(resilience4j_circuitbreaker_calls_seconds_sum{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}[1m]) / rate(resilience4j_circuitbreaker_calls_seconds_count{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}[1m])", "legendFormat": "{{kind}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}, "overrides": []}
+    },
+    {
+      "id": 11, "title": "Call rate (calls / second)", "type": "timeseries",
+      "gridPos": {"x": 12, "y": 27, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "expr": "rate(resilience4j_circuitbreaker_calls_seconds_count{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}[1m])", "legendFormat": "{{kind}}"},
+        {"refId": "B", "expr": "rate(resilience4j_circuitbreaker_not_permitted_calls_total{application=~\"$application\",instance=~\"$instance\",name=~\"$circuitbreaker_name\"}[1m])", "legendFormat": "not_permitted"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}, "overrides": []}
+    }
+  ]
+}

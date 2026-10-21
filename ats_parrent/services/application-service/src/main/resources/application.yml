@@ -1,0 +1,80 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: application-service
+  cloud:
+    openfeign:
+      client:
+        config:
+          job-service:
+            connectTimeout: 1000
+            readTimeout: 5000
+          candidate-service:
+            connectTimeout: 1000
+            readTimeout: 5000
+  datasource:
+    url: jdbc:postgresql://localhost:5432/application_sdb
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        show_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+job-service:
+  url: http://localhost:8081
+candidate-service:
+  url: http://localhost:8082
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/  # Địa chỉ Eureka Server
+    fetch-registry: true      # Tải registry về local cache
+    register-with-eureka: true  # Đăng ký bản thân vào registry
+  instance:
+    prefer-ip-address: true    # Dùng IP thay hostname - quan trọng trong Docker
+    lease-renewal-interval-in-seconds: 10   # Heartbeat mỗi 10s (dev)
+    lease-expiration-duration-in-seconds: 30  # Expiry sau 30s không có heartbeat
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        resilience4j.circuitbreaker.calls: true
+
+# Only the candidate lookup in the application-detail use case uses this circuit.
+resilience4j:
+  circuitbreaker:
+    instances:
+      candidateDetails:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        recordExceptions:
+          - feign.RetryableException
+        ignoreExceptions:
+          - feign.FeignException.FeignClientException
+        recordFailurePredicate: fu.ats.client.candidate.CandidateFailurePredicate
+        waitDurationInOpenState: 10s
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        permittedNumberOfCallsInHalfOpenState: 2
+        maxWaitDurationInHalfOpenState: 10s
+        slowCallDurationThreshold: 2s
+        slowCallRateThreshold: 50
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 20
